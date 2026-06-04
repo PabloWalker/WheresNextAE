@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wheresnext.ae — Happy Hour Finder</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<style>
+  :root {
+    --midnight: #3C2A21;
+    --golden: #FFB84C;
+    --ember: #E57C23;
+    --mint: #A5D7E8;
+    --white: #F1F1F1;
+    --midnight-light: #4e3828;
+    --midnight-dark: #2a1e18;
+    --text-muted: rgba(241,241,241,0.55);
+    --card-bg: rgba(78,56,40,0.55);
+    --border: rgba(255,184,76,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--midnight-dark);
+    color: var(--white);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SEARCH BAR ── */
+  .search-section {
+    background: var(--midnight);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
+  }
+
+  .search-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    max-width: 900px;
+    margin: 0 auto 14px;
+  }
+
+  .search-input-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  .search-input-wrap input {
+    width: 100%;
+    background: var(--midnight-dark);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px 12px 44px;
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input-wrap input:focus { border-color: var(--golden); }
+  .search-input-wrap input::placeholder { color: var(--text-muted); }
+
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  .btn {
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary {
+    background: var(--golden);
+    color: var(--midnight-dark);
+  }
+  .btn-primary:hover { background: var(--ember); color: var(--white); }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--white);
+  }
+  .btn-ghost:hover { border-color: var(--golden); color: var(--golden); }
+
+  /* ── FILTERS ── */
+  .filters-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    max-width: 900px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+  }
+
+  .filter-select {
+    background: var(--midnight-dark);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23FFB84C' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  .filter-select:focus { border-color: var(--golden); }
+  .filter-select option { background: var(--midnight-dark); }
+
+  .radius-select { min-width: 110px; }
+
+  .toggle-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--midnight-dark);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .toggle-pill.active {
+    border-color: var(--mint);
+    color: var(--mint);
+    background: rgba(165,215,232,0.08);
+  }
+
+  .toggle-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.2s;
+  }
+  .toggle-pill.active .toggle-dot { background: var(--mint); }
+
+  .result-count {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: calc(100vh - 130px);
+    min-height: 500px;
+  }
+
+  /* ── RESULTS PANEL ── */
+  .results-panel {
+    background: var(--midnight-dark);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .results-panel::-webkit-scrollbar { width: 4px; }
+  .results-panel::-webkit-scrollbar-track { background: transparent; }
+  .results-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--text-muted);
+    padding: 40px 24px;
+    text-align: center;
+  }
+
+  .empty-icon { font-size: 36px; opacity: 0.4; }
+  .empty-state h3 { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--white); opacity: 0.6; }
+  .empty-state p { font-size: 13px; line-height: 1.6; max-width: 240px; }
+
+  /* ── VENUE CARD ── */
+  .venue-card {
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .venue-card:hover { background: rgba(255,184,76,0.04); }
+  .venue-card.active { background: rgba(255,184,76,0.07); border-left: 3px solid var(--golden); }
+
+  .card-top {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .venue-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--midnight);
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+
+  .venue-thumb-placeholder {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    background: var(--midnight);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  .card-info { flex: 1; min-width: 0; }
+
+  .card-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 16px;
+    color: var(--white);
+    line-height: 1.3;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card-address {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card-tags {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+
+  .tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .tag-type {
+    background: rgba(229,124,35,0.15);
+    color: var(--ember);
+    border: 1px solid rgba(229,124,35,0.3);
+  }
+
+  .tag-emirate {
+    background: rgba(165,215,232,0.1);
+    color: var(--mint);
+    border: 1px solid rgba(165,215,232,0.2);
+  }
+
+  .tag-open {
+    background: rgba(165,215,232,0.15);
+    color: var(--mint);
+    border: 1px solid rgba(165,215,232,0.3);
+  }
+
+  .tag-closed {
+    background: rgba(241,241,241,0.06);
+    color: var(--text-muted);
+    border: 1px solid rgba(241,241,241,0.1);
+  }
+
+  .card-hh {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--golden);
+  }
+
+  .card-distance {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  /* ── EXPANDED CARD DETAIL ── */
+  .card-detail {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+  .venue-card.active .card-detail { display: block; }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .detail-item { display: flex; flex-direction: column; gap: 2px; }
+  .detail-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .detail-value { font-size: 13px; color: var(--white); }
+
+  .detail-notes {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    border-left: 2px solid var(--golden);
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .action-link {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+  }
+
+  .action-web {
+    background: var(--golden);
+    color: var(--midnight-dark);
+  }
+  .action-web:hover { background: var(--ember); color: var(--white); }
+
+  .action-ig {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--white);
+  }
+  .action-ig:hover { border-color: var(--ember); color: var(--ember); }
+
+  .action-tel {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--white);
+  }
+  .action-tel:hover { border-color: var(--mint); color: var(--mint); }
+
+  /* ── MAP ── */
+  #map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  /* Leaflet overrides */
+  .leaflet-container { background: var(--midnight-dark) !important; }
+
+  .leaflet-popup-content-wrapper {
+    background: var(--midnight);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+  }
+  .leaflet-popup-tip { background: var(--midnight); }
+  .leaflet-popup-content { margin: 14px 16px; min-width: 180px; }
+  .popup-name { font-family: 'DM Serif Display', serif; font-size: 15px; margin-bottom: 4px; }
+  .popup-type { font-size: 11px; color: var(--golden); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .marker-cluster-small,
+  .marker-cluster-medium,
+  .marker-cluster-large {
+    background-color: rgba(255,184,76,0.2) !important;
+  }
+  .marker-cluster-small div,
+  .marker-cluster-medium div,
+  .marker-cluster-large div {
+    background-color: rgba(255,184,76,0.7) !important;
+    color: var(--midnight-dark) !important;
+    font-weight: 700 !important;
+    font-family: 'DM Sans', sans-serif !important;
+  }
+
+  /* ── LOADING ── */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--midnight-dark);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 9999;
+    transition: opacity 0.4s;
+  }
+  .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--golden);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 13px; color: var(--text-muted); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--midnight);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 13px;
+    color: var(--white);
+    z-index: 9998;
+    transition: transform 0.3s;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: rgba(229,124,35,0.5); color: var(--ember); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .main-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: 45vh 1fr;
+      height: auto;
+      min-height: calc(100vh - 130px);
+    }
+
+    #map { height: 100%; }
+
+    .results-panel {
+      border-right: none;
+      border-top: 1px solid var(--border);
+      max-height: 55vh;
+    }
+
+    .search-row { flex-wrap: wrap; }
+    .filters-row { gap: 6px; }
+    .result-count { width: 100%; margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading venues…</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- SEARCH & FILTERS -->
+<div class="search-section">
+  <div class="search-row">
+    <div class="search-input-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="addressInput" placeholder="Enter your address or area…" />
+    </div>
+    <button class="btn btn-primary" onclick="searchAddress()">Search</button>
+    <button class="btn btn-ghost" onclick="useMyLocation()" title="Use my location">
+      ◎ Locate me
+    </button>
+  </div>
+
+  <div class="filters-row">
+    <select class="filter-select" id="emirateFilter" onchange="applyFilters()">
+      <option value="">All Emirates</option>
+      <option>Abu Dhabi</option>
+      <option>Dubai</option>
+      <option>Sharjah</option>
+      <option>Ajman</option>
+      <option>Umm Al Quwain</option>
+      <option>Ras Al Khaimah</option>
+      <option>Fujairah</option>
+    </select>
+
+    <select class="filter-select" id="typeFilter" onchange="applyFilters()">
+      <option value="">All Venue Types</option>
+      <option>Bar</option>
+      <option>Restaurant</option>
+      <option>Hotel Bar</option>
+      <option>Rooftop</option>
+      <option>Sports Bar</option>
+      <option>Beach Club</option>
+    </select>
+
+    <select class="filter-select radius-select" id="radiusFilter" onchange="applyFilters()">
+      <option value="3">Within 3 km</option>
+      <option value="5">Within 5 km</option>
+      <option value="10">Within 10 km</option>
+      <option value="25">Within 25 km</option>
+    </select>
+
+    <div class="toggle-pill" id="hhTodayToggle" onclick="toggleHHToday()">
+      <div class="toggle-dot"></div>
+      Happy hour today
+    </div>
+
+    <span class="result-count" id="resultCount">Enter a location to begin</span>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+  <div class="results-panel" id="resultsPanel">
+    <div class="empty-state">
+      <div class="empty-icon">🍹</div>
+      <h3>Find your next happy hour</h3>
+      <p>Enter your address or use your location to see venues near you.</p>
+    </div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';
+const SHEET_CSV_URL = 'YOUR_GOOGLE_SHEET_CSV_URL';
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let allVenues = [];
+let filteredVenues = [];
+let userLocation = null;
+let map = null;
+let markerLayer = null;
+let userMarker = null;
+let activeCardIndex = null;
+let hhTodayActive = false;
+let markers = [];
+let toastTimer;
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function hideLoading() {
+  const el = document.getElementById('loadingOverlay');
+  el.classList.add('hidden');
+  setTimeout(() => el.style.display = 'none', 400);
+}
+
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  if (!msg) { el.classList.remove('show'); return; }
+  el.textContent = msg;
+  el.className = 'toast' + (isError ? ' error' : '') + ' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── MARKER ICON ───────────────────────────────────────────────────────────────
+function makeIcon(isActive) {
+  const size = isActive ? 16 : 12;
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${size}px; height:${size}px;
+      background:${isActive ? '#FFB84C' : '#E57C23'};
+      border:2px solid ${isActive ? '#3C2A21' : 'rgba(255,184,76,0.4)'};
+      border-radius:50%;
+      box-shadow:0 0 ${isActive ? 8 : 4}px ${isActive ? '#FFB84C' : 'rgba(229,124,35,0.5)'};
+    "></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2]
+  });
+}
+
+// ── DATA LOADING ──────────────────────────────────────────────────────────────
+async function loadVenues() {
+  try {
+    const res = await fetch(SHEET_CSV_URL);
+    const text = await res.text();
+    allVenues = parseCSV(text);
+    hideLoading();
+  } catch (e) {
+    console.warn('Sheet unavailable, using demo data');
+    allVenues = getDemoData();
+    hideLoading();
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  return lines.slice(1).map(line => {
+    const values = parseCSVLine(line);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (values[i] || '').replace(/^"|"$/g, '').trim(); });
+    return obj;
+  }).filter(v => v['Lat'] && v['Long'] && !isNaN(parseFloat(v['Lat'])));
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQuotes = !inQuotes; continue; }
+    if (line[i] === ',' && !inQuotes) { result.push(current); current = ''; continue; }
+    current += line[i];
+  }
+  result.push(current);
+  return result;
+}
+
+// ── GEOCODING ─────────────────────────────────────────────────────────────────
+async function searchAddress() {
+  const address = document.getElementById('addressInput').value.trim();
+  if (!address) { showToast('Please enter an address', true); return; }
+  showToast('Finding location…');
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_MAPS_API_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.results && data.results.length > 0) {
+      const loc = data.results[0].geometry.location;
+      setUserLocation(loc.lat, loc.lng, data.results[0].formatted_address);
+    } else {
+      showToast('Address not found. Try a more specific query.', true);
+    }
+  } catch (e) {
+    showToast('Geocoding failed. Check your API key.', true);
+  }
+}
+
+function useMyLocation() {
+  if (!navigator.geolocation) { showToast('Geolocation not supported', true); return; }
+  showToast('Getting your location…');
+  navigator.geolocation.getCurrentPosition(
+    pos => setUserLocation(pos.coords.latitude, pos.coords.longitude, 'Your location'),
+    () => showToast('Could not get location. Try entering an address.', true)
+  );
+}
+
+function setUserLocation(lat, lng, label) {
+  userLocation = { lat, lng };
+  if (userMarker) map.removeLayer(userMarker);
+  userMarker = L.circleMarker([lat, lng], {
+    radius: 8, fillColor: '#A5D7E8', color: '#3C2A21', weight: 2, fillOpacity: 1
+  }).addTo(map).bindPopup(`<div class="popup-name">${label}</div><div class="popup-type">You are here</div>`);
+  map.setView([lat, lng], 13);
+  applyFilters();
+  showToast('');
+}
+
+// ── FILTERS ───────────────────────────────────────────────────────────────────
+function getTodayAbbr() {
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()];
+}
+
+function venueOpenToday(venue) {
+  const days = (venue['Days Happy Hours Run'] || '').split(',').map(d => d.trim().toLowerCase());
+  return days.includes(getTodayAbbr().toLowerCase());
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function applyFilters() {
+  if (!userLocation) return;
+  const emirate = document.getElementById('emirateFilter').value;
+  const type = document.getElementById('typeFilter').value;
+  const radius = parseFloat(document.getElementById('radiusFilter').value);
+
+  filteredVenues = allVenues
+    .map(v => ({ ...v, distance: haversine(userLocation.lat, userLocation.lng, parseFloat(v['Lat']), parseFloat(v['Long'])) }))
+    .filter(v => v.distance <= radius)
+    .filter(v => !emirate || v['Emirate'] === emirate)
+    .filter(v => !type || v['Venue Type'] === type)
+    .filter(v => !hhTodayActive || venueOpenToday(v))
+    .sort((a, b) => a.distance - b.distance);
+
+  renderResults();
+  renderMarkers();
+  const count = filteredVenues.length;
+  document.getElementById('resultCount').textContent = `${count} venue${count !== 1 ? 's' : ''} found`;
+}
+
+function toggleHHToday() {
+  hhTodayActive = !hhTodayActive;
+  document.getElementById('hhTodayToggle').classList.toggle('active', hhTodayActive);
+  applyFilters();
+}
+
+// ── RENDER RESULTS ────────────────────────────────────────────────────────────
+function renderResults() {
+  const panel = document.getElementById('resultsPanel');
+  if (filteredVenues.length === 0) {
+    panel.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No venues found</h3><p>Try expanding your radius or adjusting the filters.</p></div>`;
+    return;
+  }
+  panel.innerHTML = filteredVenues.map((v, i) => buildCard(v, i)).join('');
+}
+
+function buildCard(v, i) {
+  const todayOpen = venueOpenToday(v);
+  const distStr = v.distance < 1 ? `${Math.round(v.distance * 1000)}m` : `${v.distance.toFixed(1)}km`;
+  const thumb = v['Thumbnail URL']
+    ? `<img class="venue-thumb" src="${v['Thumbnail URL']}" alt="${v['Venue Name']}" onerror="this.style.display='none'">`
+    : `<div class="venue-thumb-placeholder">🍸</div>`;
+  const website  = v['Website']          ? `<a class="action-link action-web" href="${v['Website']}" target="_blank">🌐 Website</a>` : '';
+  const instagram = v['Instagram Handle'] ? `<a class="action-link action-ig" href="https://instagram.com/${v['Instagram Handle'].replace('@','')}" target="_blank">@ Instagram</a>` : '';
+  const phone    = v['Contact Phone']    ? `<a class="action-link action-tel" href="tel:${v['Contact Phone']}">📞 Call</a>` : '';
+  const notes    = v['Happy Hour Details/Notes'] ? `<div class="detail-notes">${v['Happy Hour Details/Notes']}</div>` : '';
+
+  return `<div class="venue-card" id="card-${i}" onclick="selectCard(${i})">
+    <div class="card-distance">${distStr}</div>
+    <div class="card-top">
+      ${thumb}
+      <div class="card-info">
+        <div class="card-name">${v['Venue Name']}</div>
+        <div class="card-address">${v['Venue Address'] || ''}</div>
+        <div class="card-tags">
+          <span class="tag tag-type">${v['Venue Type'] || ''}</span>
+          <span class="tag tag-emirate">${v['Emirate'] || ''}</span>
+          <span class="tag ${todayOpen ? 'tag-open' : 'tag-closed'}">${todayOpen ? '● HH today' : '○ Not today'}</span>
+        </div>
+        <div class="card-hh">🕐 ${v['Happy Hour Hours'] || 'Hours not listed'}</div>
+      </div>
+    </div>
+    <div class="card-detail">
+      <div class="detail-grid">
+        <div class="detail-item"><span class="detail-label">Days</span><span class="detail-value">${v['Days Happy Hours Run'] || '—'}</span></div>
+        <div class="detail-item"><span class="detail-label">Hours</span><span class="detail-value">${v['Happy Hour Hours'] || '—'}</span></div>
+        ${v['Contact Email'] ? `<div class="detail-item"><span class="detail-label">Email</span><span class="detail-value" style="font-size:11px">${v['Contact Email']}</span></div>` : ''}
+        ${v['Contact Phone'] ? `<div class="detail-item"><span class="detail-label">Phone</span><span class="detail-value">${v['Contact Phone']}</span></div>` : ''}
+      </div>
+      ${notes}
+      <div class="card-actions">${website}${instagram}${phone}</div>
+    </div>
+  </div>`;
+}
+
+function selectCard(i) {
+  const prev = document.getElementById(`card-${activeCardIndex}`);
+  if (prev) prev.classList.remove('active');
+  if (activeCardIndex === i) { activeCardIndex = null; resetMarkers(); return; }
+  activeCardIndex = i;
+  const card = document.getElementById(`card-${i}`);
+  if (card) { card.classList.add('active'); card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  const v = filteredVenues[i];
+  map.setView([parseFloat(v['Lat']), parseFloat(v['Long'])], 15);
+  if (markers[i]) markerLayer.zoomToShowLayer(markers[i], () => markers[i].openPopup());
+  resetMarkers();
+  if (markers[i]) markers[i].setIcon(makeIcon(true));
+}
+
+// ── RENDER MARKERS ────────────────────────────────────────────────────────────
+function renderMarkers() {
+  markerLayer.clearLayers();
+  markers = [];
+  filteredVenues.forEach((v, i) => {
+    const lat = parseFloat(v['Lat']), lng = parseFloat(v['Long']);
+    if (isNaN(lat) || isNaN(lng)) return;
+    const marker = L.marker([lat, lng], { icon: makeIcon(false) });
+    marker.bindPopup(`<div class="popup-name">${v['Venue Name']}</div><div class="popup-type">${v['Venue Type']} · ${v['Emirate']}</div>`);
+    marker.on('click', () => selectCard(i));
+    markers.push(marker);
+    markerLayer.addLayer(marker);
+  });
+}
+
+function resetMarkers() {
+  markers.forEach(m => m.setIcon(makeIcon(false)));
+  if (activeCardIndex !== null && markers[activeCardIndex]) markers[activeCardIndex].setIcon(makeIcon(true));
+}
+
+// ── DEMO DATA ─────────────────────────────────────────────────────────────────
+function getDemoData() {
+  return [
+    { 'Venue Name': 'The Rooftop Bar', 'Venue Address': 'Downtown Dubai', 'Lat': '25.1972', 'Long': '55.2796', 'Emirate': 'Dubai', 'Venue Type': 'Rooftop', 'Days Happy Hours Run': 'Mon,Tue,Wed,Thu,Fri', 'Happy Hour Hours': '17:00–20:00', 'Happy Hour Details/Notes': 'Buy one get one on all cocktails. Selected wines half price.', 'Contact Email': 'hello@rooftopbar.ae', 'Instagram Handle': '@rooftopbardxb', 'Contact Phone': '+971 4 123 4567', 'Website': 'https://example.com', 'Thumbnail URL': '' },
+    { 'Venue Name': 'The Social Club', 'Venue Address': 'JBR Walk, Dubai Marina', 'Lat': '25.0750', 'Long': '55.1343', 'Emirate': 'Dubai', 'Venue Type': 'Bar', 'Days Happy Hours Run': 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', 'Happy Hour Hours': '16:00–19:00', 'Happy Hour Details/Notes': 'Daily happy hour, all day Sunday.', 'Contact Email': '', 'Instagram Handle': '@thesocialclubdxb', 'Contact Phone': '', 'Website': 'https://example.com', 'Thumbnail URL': '' },
+    { 'Venue Name': 'Sunset Grill', 'Venue Address': 'Palm Jumeirah, Dubai', 'Lat': '25.1124', 'Long': '55.1390', 'Emirate': 'Dubai', 'Venue Type': 'Restaurant', 'Days Happy Hours Run': 'Wed,Thu,Fri,Sat', 'Happy Hour Hours': '18:00–21:00', 'Happy Hour Details/Notes': 'Half price house drinks with any food order.', 'Contact Email': 'reservations@sunsetgrill.ae', 'Instagram Handle': '', 'Contact Phone': '+971 4 987 6543', 'Website': '', 'Thumbnail URL': '' },
+    { 'Venue Name': 'Sports Central', 'Venue Address': 'Business Bay, Dubai', 'Lat': '25.1858', 'Long': '55.2673', 'Emirate': 'Dubai', 'Venue Type': 'Sports Bar', 'Days Happy Hours Run': 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', 'Happy Hour Hours': '12:00–18:00', 'Happy Hour Details/Notes': 'All day happy hour on draft beer. Match day specials.', 'Contact Email': '', 'Instagram Handle': '@sportscentraldxb', 'Contact Phone': '', 'Website': 'https://example.com', 'Thumbnail URL': '' },
+    { 'Venue Name': 'Beach House', 'Venue Address': 'Saadiyat Island, Abu Dhabi', 'Lat': '24.5421', 'Long': '54.4348', 'Emirate': 'Abu Dhabi', 'Venue Type': 'Beach Club', 'Days Happy Hours Run': 'Thu,Fri,Sat', 'Happy Hour Hours': '17:00–19:00', 'Happy Hour Details/Notes': 'Sunset happy hour. Cocktails and mocktails included.', 'Contact Email': 'info@beachhouse.ae', 'Instagram Handle': '@beachhouseabudhabi', 'Contact Phone': '+971 2 555 1234', 'Website': 'https://example.com', 'Thumbnail URL': '' },
+  ];
+}
+
+// ── INIT — wait for full page + scripts to load ───────────────────────────────
+window.addEventListener('load', function () {
+  // Map
+  map = L.map('map', { center: [25.2048, 55.2708], zoom: 11, zoomControl: false });
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © Carto', subdomains: 'abcd', maxZoom: 19
+  }).addTo(map);
+  markerLayer = L.markerClusterGroup({ maxClusterRadius: 50, showCoverageOnHover: false });
+  map.addLayer(markerLayer);
+
+  // Keyboard shortcut on address input
+  document.getElementById('addressInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchAddress();
+  });
+
+  // Load venues
+  loadVenues();
+});
+</script>
+</body>
+</html>
