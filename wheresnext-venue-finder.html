@@ -585,6 +585,7 @@
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 const GOOGLE_MAPS_API_KEY = 'AIzaSyCxFxBzOcjaE-oKKz6hsYSblFiX5mjx91c';
 const SHEET_CSV_URL = 'https://api.allorigins.win/raw?url=https://docs.google.com/spreadsheets/d/e/2PACX-1vRvzVVm4-S_3xIqNwgIyCW3Nx0EaA62af9MMr1TFz6j7EYMLzWR0YvtNe4G8kR3Q8etGqt00WxicyJP/pub?gid=0&single=true&output=csv';
+
 // ── STATE ────────────────────────────────────────────────────────────────────
 let allVenues = [];
 let filteredVenues = [];
@@ -634,7 +635,15 @@ function makeIcon(isActive) {
 async function loadVenues() {
   try {
     const res = await fetch(SHEET_CSV_URL);
-    const text = await res.text();
+    const raw = await res.text();
+    // allorigins wraps response in JSON: { contents: '...' }
+    let text = raw;
+    try {
+      const json = JSON.parse(raw);
+      if (json.contents) text = json.contents;
+    } catch (e) {
+      // not JSON, already raw CSV — use as-is
+    }
     allVenues = parseCSV(text);
     hideLoading();
   } catch (e) {
