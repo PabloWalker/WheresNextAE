@@ -16,6 +16,7 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
   =============================================
 -->
 
+  
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>wheresnext.ae — Happy Hour Finder</title>
@@ -286,6 +287,67 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
     font-size: 12px;
     color: var(--text-muted);
     white-space: nowrap;
+  }
+
+  .day-checkboxes {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    background: var(--midnight-dark);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+  }
+
+  .day-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-right: 2px;
+    white-space: nowrap;
+  }
+
+  .day-check {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--white);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .day-check input[type="checkbox"] {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid rgba(255,184,76,0.3);
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .day-check input[type="checkbox"]:checked {
+    background: var(--golden);
+    border-color: var(--golden);
+  }
+
+  .day-check input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 0px;
+    width: 5px;
+    height: 9px;
+    border: 2px solid var(--midnight-dark);
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
   }
 
   /* ── MAIN LAYOUT ── */
@@ -620,6 +682,7 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
     .toggle-pill { width: 100%; justify-content: center; }
     .result-count { width: 100%; margin-left: 0; }
     .search-section.expanded .search-expandable { max-height: 320px; }
+    .day-checkboxes { width: 100%; }
   }
 </style>
 </head>
@@ -696,14 +759,25 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
 
       <select class="filter-select radius-select" id="radiusFilter" onchange="applyFilters()">
         <option value="0.5">Within 500m</option>
-        <option value="1" selected>Within 1 km</option>
-        <option value="5">Within 5 km</option>
+        <option value="1">Within 1 km</option>
+        <option value="5" selected>Within 5 km</option>
         <option value="15">Within 15 km</option>
       </select>
 
       <div class="toggle-pill" id="hhTodayToggle" onclick="toggleHHToday()">
         <div class="toggle-dot"></div>
-        Happy hour today
+        Today only
+      </div>
+
+      <div class="day-checkboxes">
+        <span class="day-label">Or pick days:</span>
+        <label class="day-check"><input type="checkbox" value="Mon" onchange="applyFilters()"> Mon</label>
+        <label class="day-check"><input type="checkbox" value="Tue" onchange="applyFilters()"> Tue</label>
+        <label class="day-check"><input type="checkbox" value="Wed" onchange="applyFilters()"> Wed</label>
+        <label class="day-check"><input type="checkbox" value="Thu" onchange="applyFilters()"> Thu</label>
+        <label class="day-check"><input type="checkbox" value="Fri" onchange="applyFilters()"> Fri</label>
+        <label class="day-check"><input type="checkbox" value="Sat" onchange="applyFilters()"> Sat</label>
+        <label class="day-check"><input type="checkbox" value="Sun" onchange="applyFilters()"> Sun</label>
       </div>
 
       <span class="result-count" id="resultCount">Enter a location to begin</span>
@@ -929,12 +1003,27 @@ function applyFilters() {
   const type = document.getElementById('typeFilter').value;
   const radius = parseFloat(document.getElementById('radiusFilter').value);
 
+  // If any day checkbox is ticked, deactivate the today toggle
+  const checkedDaysCount = document.querySelectorAll('.day-check input:checked').length;
+  if (checkedDaysCount > 0 && hhTodayActive) {
+    hhTodayActive = false;
+    document.getElementById('hhTodayToggle').classList.remove('active');
+  }
+
+  // Collect checked days
+  const checkedDays = Array.from(document.querySelectorAll('.day-check input:checked')).map(cb => cb.value.toLowerCase());
+
   filteredVenues = allVenues
     .map(v => ({ ...v, distance: haversine(userLocation.lat, userLocation.lng, parseFloat(v['Lat']), parseFloat(v['Long'])) }))
     .filter(v => v.distance <= radius)
     .filter(v => !emirate || v['Emirate'] === emirate)
     .filter(v => !type || v['Venue Type'] === type)
     .filter(v => !hhTodayActive || venueOpenToday(v))
+    .filter(v => {
+      if (checkedDays.length === 0) return true; // no day filter active
+      const venueDays = (v['Days Happy Hours Run'] || '').split(',').map(d => d.trim().toLowerCase());
+      return checkedDays.some(day => venueDays.includes(day)); // OR logic
+    })
     .sort((a, b) => a.distance - b.distance);
 
   renderResults();
@@ -959,6 +1048,7 @@ function resetAll() {
   document.getElementById('typeFilter').value = '';
   document.getElementById('radiusFilter').value = '5';
   document.getElementById('quickLocation').value = '';
+  document.querySelectorAll('.day-check input:checked').forEach(cb => cb.checked = false);
   if (hhTodayActive) toggleHHToday();
   userLocation = null;
   if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
@@ -1012,6 +1102,10 @@ function collapseSearch(locationLabel) {
 function toggleHHToday() {
   hhTodayActive = !hhTodayActive;
   document.getElementById('hhTodayToggle').classList.toggle('active', hhTodayActive);
+  // Clear day checkboxes when today toggle is activated — they're mutually exclusive
+  if (hhTodayActive) {
+    document.querySelectorAll('.day-check input:checked').forEach(cb => cb.checked = false);
+  }
   applyFilters();
 }
 
