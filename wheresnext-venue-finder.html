@@ -116,6 +116,15 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
   }
   .search-bar-count.visible { display: inline-block; }
 
+  .collapsed-reset {
+    padding: 4px 8px;
+    font-size: 14px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: none;
+  }
+  .search-bar-count.visible ~ .collapsed-reset { display: inline-block; }
+
   /* Expandable panel */
   .search-expandable {
     overflow: hidden;
@@ -195,6 +204,21 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
     color: var(--white);
   }
   .btn-ghost:hover { border-color: var(--golden); color: var(--golden); }
+
+  .btn-reset {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--text-muted);
+    padding: 12px 14px;
+    font-size: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .btn-reset:hover { border-color: var(--ember); color: var(--ember); }
+
+  .quick-location-select { min-width: 160px; flex-shrink: 0; }
 
   /* ── FILTERS ── */
   .filters-row {
@@ -588,6 +612,7 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
 
     .search-row { flex-wrap: wrap; }
     .search-input-wrap { width: 100%; flex: none; }
+    .quick-location-select { width: 100%; flex: none; min-width: unset; }
     .search-row .btn { flex: 1; }
     .filters-row { flex-wrap: wrap; gap: 6px; }
     .filter-select { flex: 1; min-width: 130px; }
@@ -613,6 +638,7 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
   <div class="search-collapsed-bar" onclick="toggleSearchPanel()">
     <span class="search-collapsed-summary" id="searchSummary">Enter a location to find venues near you</span>
     <span class="search-bar-count" id="searchBarCount"></span>
+    <button class="btn-reset collapsed-reset" onclick="resetAll(); event.stopPropagation()" title="Reset all filters">↺</button>
     <button class="search-toggle-btn" onclick="toggleSearchPanel(); event.stopPropagation()">
       <span id="searchToggleLabel">Search &amp; Filter</span>
       <span class="search-toggle-arrow">▾</span>
@@ -626,8 +652,23 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
         <span class="search-icon">⌕</span>
         <input type="text" id="addressInput" placeholder="Enter your address or area…" />
       </div>
+      <select class="filter-select quick-location-select" id="quickLocation" onchange="selectQuickLocation()">
+        <option value="">Quick locations…</option>
+        <option value="Dubai Marina, Dubai">Dubai Marina</option>
+        <option value="Jumeirah Beach Residence, Dubai">Jumeirah Beach Residence</option>
+        <option value="Downtown Dubai">Downtown Dubai</option>
+        <option value="Business Bay, Dubai">Business Bay</option>
+        <option value="City Walk, Dubai">City Walk</option>
+        <option value="Al Seef, Dubai">Al Seef</option>
+        <option value="Dubai Creek, Dubai">Dubai Creek</option>
+        <option value="Jumeirah, Dubai">Jumeirah</option>
+        <option value="Palm Jumeirah, Dubai">Palm Jumeirah</option>
+        <option value="Zero Gravity Beach, Dubai">Zero Gravity</option>
+        <option value="Dubai Mall, Dubai">Dubai Mall</option>
+        <option value="Burj Khalifa, Dubai">Burj Khalifa Area</option>
+      </select>
       <button class="btn btn-primary" onclick="searchAddress()">Search</button>
-
+      <button class="btn btn-reset" onclick="resetAll()" title="Reset all filters">↺</button>
     </div>
 
     <div class="filters-row">
@@ -653,10 +694,10 @@ const LOG_URL             = 'https://script.google.com/macros/s/AKfycbziEnp7rV4V
       </select>
 
       <select class="filter-select radius-select" id="radiusFilter" onchange="applyFilters()">
-        <option value="3">Within 3 km</option>
-        <option value="5">Within 5 km</option>
-        <option value="10">Within 10 km</option>
-        <option value="25">Within 25 km</option>
+        <option value="0.5">Within 500m</option>
+        <option value="1">Within 1 km</option>
+        <option value="5" selected>Within 5 km</option>
+        <option value="15">Within 15 km</option>
       </select>
 
       <div class="toggle-pill" id="hhTodayToggle" onclick="toggleHHToday()">
@@ -909,6 +950,42 @@ function applyFilters() {
   }
   // Log the search
   if (userLocation) logSearch(count);
+}
+
+function resetAll() {
+  document.getElementById('addressInput').value = '';
+  document.getElementById('emirateFilter').value = '';
+  document.getElementById('typeFilter').value = '';
+  document.getElementById('radiusFilter').value = '5';
+  document.getElementById('quickLocation').value = '';
+  if (hhTodayActive) toggleHHToday();
+  userLocation = null;
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+  markerLayer.clearLayers();
+  markers = [];
+  filteredVenues = [];
+  activeCardIndex = null;
+  document.getElementById('resultsPanel').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🍹</div>
+      <h3>Find your next happy hour</h3>
+      <p>Enter your address or use your location to see venues near you.</p>
+    </div>`;
+  document.getElementById('resultCount').textContent = 'Enter a location to begin';
+  document.getElementById('searchSummary').innerHTML = 'Enter a location to find venues near you';
+  document.getElementById('searchBarCount').textContent = '';
+  document.getElementById('searchBarCount').classList.remove('visible');
+  map.setView([25.2048, 55.2708], 11);
+  // Re-expand the search panel
+  document.getElementById('searchSection').classList.add('expanded');
+  document.getElementById('searchToggleLabel').textContent = 'Search & Filter';
+}
+
+function selectQuickLocation() {
+  const val = document.getElementById('quickLocation').value;
+  if (!val) return;
+  document.getElementById('addressInput').value = val;
+  document.getElementById('quickLocation').value = '';
 }
 
 function toggleSearchPanel() {
