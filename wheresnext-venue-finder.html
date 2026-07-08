@@ -675,8 +675,9 @@
 <script>
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 const GOOGLE_MAPS_API_KEY = 'AIzaSyCxFxBzOcjaE-oKKz6hsYSblFiX5mjx91c';
-const SHEET_CSV_URL = 'https://script.google.com/macros/s/AKfycbzj9J_yBDDr1GgLLsMWbptaYYgUqseP2Tdqd8Z8ekrz0tbfrBlmz9Nou6TsRJL7N3Sk/exec';
-  
+const SHEET_CSV_URL = 'https://script.google.com/macros/s/AKfycbyvvZuUjT9uTBM9r6YAb7ftMqv75c2oeKq5xlVkWmg7qI6_wGduPOlIDTHuQ3xrvAcj/exec';
+const LOG_URL = 'https://script.google.com/macros/s/AKfycbyvvZuUjT9uTBM9r6YAb7ftMqv75c2oeKq5xlVkWmg7qI6_wGduPOlIDTHuQ3xrvAcj/exec'; // same Apps Script URL as SHEET_CSV_URL
+
 // ── STATE ────────────────────────────────────────────────────────────────────
 let allVenues = [];
 let filteredVenues = [];
@@ -824,6 +825,29 @@ function setUserLocation(lat, lng, label) {
   setTimeout(() => collapseSearch(label), 300);
 }
 
+// ── SEARCH LOGGING ───────────────────────────────────────────────────────────
+let logTimer = null;
+
+function logSearch(resultsFound) {
+  // Debounce — wait 1.5s after last filter change before logging
+  clearTimeout(logTimer);
+  logTimer = setTimeout(() => {
+    const data = {
+      searchTerm: document.getElementById('addressInput').value.trim() || 'Geolocation',
+      emirate: document.getElementById('emirateFilter').value || '',
+      type: document.getElementById('typeFilter').value || '',
+      radius: parseFloat(document.getElementById('radiusFilter').value),
+      hhToday: hhTodayActive,
+      resultsFound: resultsFound
+    };
+    fetch(LOG_URL, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' }
+    }).catch(() => {}); // silent fail — logging should never break the widget
+  }, 1500);
+}
+
 // ── FILTERS ───────────────────────────────────────────────────────────────────
 function getTodayAbbr() {
   return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()];
@@ -868,6 +892,8 @@ function applyFilters() {
     countEl.textContent = countText;
     countEl.classList.add('visible');
   }
+  // Log the search
+  if (userLocation) logSearch(count);
 }
 
 function toggleSearchPanel() {
